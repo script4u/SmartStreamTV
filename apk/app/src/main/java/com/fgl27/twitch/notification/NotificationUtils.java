@@ -73,7 +73,7 @@ import net.grandcentrix.tray.AppPreferences;
 
 public final class NotificationUtils {
 
-    private static final String TAG = "STTV_NotificationUtils";
+    private static final String TAG = "SSTV_NotificationUtils";
 
     private static final Type MapStringType = new TypeToken<Map<String, StreamObj>>() {}.getType();
 

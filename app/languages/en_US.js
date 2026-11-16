@@ -89,7 +89,7 @@ function en_USLang() {
     STR_EXIT_AGAIN = 'Click again to exit';
     STR_EXIT_AGAIN_PICTURE = 'Click again to exit picture-in-picture mode';
     STR_EXIT_AGAIN_MULTI = 'Click again to exit multistream mode';
-    STR_EXIT_MESSAGE = 'Are you sure you want to exit the SmartTV Client for Twitch?';
+    STR_EXIT_MESSAGE = 'Are you sure you want to exit SmartStreamTV?';
     STR_EXIT = 'Exit';
     STR_CHANGELOG = 'Changelog';
     STR_FULL_CHANGELOG = 'Full changelog';
@@ -147,7 +147,7 @@ function en_USLang() {
     STR_MS = 'Ms';
     STR_HR = 'Hr';
     STR_SOURCE = 'Source';
-    STR_TWITCH_TV = 'SmartTV Client for Twitch';
+    STR_TWITCH_TV = 'SmartStreamTV';
     STR_CLOSE_THIS = 'Press return or enter to close this';
     STR_CLOSE_THIS2 = 'Press return to close this';
     STR_CLOSE_THIS3 = 'Press return to show the update dialog or enter to close this';

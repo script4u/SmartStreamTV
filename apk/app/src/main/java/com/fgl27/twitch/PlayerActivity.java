@@ -107,7 +107,7 @@ import net.grandcentrix.tray.AppPreferences;
 //Media3 issue TODO review and remove this when the problem is resolved
 public class PlayerActivity extends Activity {
 
-    private final String TAG = "STTV_PlayerActivity";
+    private final String TAG = "SSTV_PlayerActivity";
     private final Pattern TIME_NAME = Pattern.compile("time=([^\\s]+)");
 
     private BroadcastReceiver mScreenOffReceiver = null;

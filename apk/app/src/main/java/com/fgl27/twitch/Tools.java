@@ -105,7 +105,7 @@ import net.grandcentrix.tray.AppPreferences;
 //Media3 issue TODO review and remove this when the problem is resolved
 public final class Tools {
 
-    private static final String TAG = "STTV_Tools";
+    private static final String TAG = "SSTV_Tools";
 
     private static final Type ArrayType = new TypeToken<String[][]>() {}.getType();
 

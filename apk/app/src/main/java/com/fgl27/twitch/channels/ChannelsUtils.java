@@ -72,7 +72,7 @@ public final class ChannelsUtils {
 
     private static final int JOB_ID = 1;
 
-    private static final String TAG = "STTV_ChannelsUtils";
+    private static final String TAG = "SSTV_ChannelsUtils";
 
     private static final String[] TV_CONTRACT_ARRAY = { TvContractCompat.Channels._ID, TvContract.Channels.COLUMN_DISPLAY_NAME };
 

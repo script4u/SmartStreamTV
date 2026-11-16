@@ -277,7 +277,7 @@ public class DefaultHttpDataSource extends BaseDataSource implements HttpDataSou
     @UnstableApi
     public static final int DEFAULT_READ_TIMEOUT_MILLIS = 8 * 1000;
 
-    private static final String TAG = "STTV_DefaultHttpDataSource";
+    private static final String TAG = "SSTV_DefaultHttpDataSource";
     private static final int MAX_REDIRECTS = 20; // Same limit as okhttp.
     private static final int HTTP_STATUS_TEMPORARY_REDIRECT = 307;
     private static final int HTTP_STATUS_PERMANENT_REDIRECT = 308;

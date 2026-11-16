@@ -456,8 +456,6 @@ function DefaultLang() {
         STR_ABOUT_INFO_2 +
         (Main_IsOn_OSInterface ? '' : STR_BR + STR_RED_DIV + STR_ABOUT_INFO_2_SOURCE + '</div>') +
         STR_CONTACT +
-        STR_PAYPAL +
-        STR_BITCOIN +
         STR_BR +
         STR_DIV_TITLE +
         STR_ABOUT_INFO_18 +
@@ -465,7 +463,7 @@ function DefaultLang() {
         STR_ABOUT_INFO_19 +
         STR_BR +
         STR_DIV_LINK +
-        DefaultMakeLink(STR_ABOUT_INFO_20) +
+        DefaultMakeLink('https://github.com/script4u/SmartStreamTV') +
         '</div>' +
         STR_BR +
         STR_BR +
