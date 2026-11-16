@@ -62,6 +62,12 @@ var ChatLive_selectedChannel = [];
 var ChatLive_sub_replace = new RegExp('\\\\s', 'gi');
 var ChatLive_chat_line_class = '';
 
+//Buffered chat lines, flushed once per frame into a single DocumentFragment:
+//appending messages one by one forces a layout/paint per message, batching
+//turns N passes into one, critical on low end devices
+var ChatLive_AddBuffer = [[], []];
+var ChatLive_AddBufferScheduled = [false, false];
+
 //Emote image limits (settings chat_emote_max_message/chat_emote_max_total,
 //0 = no limit). Covers every image in a chat message: third party emotes
 //(7TV/BTTV/FFZ, zero-width combos), Twitch native emotes, bit cheers and
@@ -194,6 +200,10 @@ function ChatLive_Init(chat_number, SkipClear) {
 }
 
 function ChatLive_Switch() {
+    //Flush pending lines so they land on the right chat div before the swap
+    ChatLive_FlushAddBuffer(0);
+    ChatLive_FlushAddBuffer(1);
+
     var innerHTMLTemp = Chat_div[1].innerHTML;
 
     Chat_div[1].innerHTML = Chat_div[0].innerHTML;
@@ -2034,14 +2044,45 @@ function ChatLive_LineAddSimple(message) {
 
 function ChatLive_LineAdd(messageObj) {
     if (ChatLive_Playing) {
-        ChatLive_ElementAdd(messageObj);
-
-        if (ChatLive_LineAddCounter[messageObj.chat_number]++ > Chat_CleanMax) {
-            ChatLive_LineAddCounter[messageObj.chat_number] = 0;
-            Chat_Clean(messageObj.chat_number);
-        }
+        ChatLive_AddBuffer[messageObj.chat_number].push(messageObj);
+        ChatLive_ScheduleAddFlush(messageObj.chat_number);
+        ChatLive_LineAddCounter[messageObj.chat_number]++;
     } else {
         ChatLive_Messages[messageObj.chat_number].push(messageObj);
+    }
+}
+
+function ChatLive_ScheduleAddFlush(chat_number) {
+    if (ChatLive_AddBufferScheduled[chat_number]) return;
+
+    ChatLive_AddBufferScheduled[chat_number] = true;
+
+    (window.requestAnimationFrame ||
+        function (cb) {
+            return setTimeout(cb, 16);
+        })(function () {
+        ChatLive_AddBufferScheduled[chat_number] = false;
+        ChatLive_FlushAddBuffer(chat_number);
+    });
+}
+
+function ChatLive_FlushAddBuffer(chat_number) {
+    var buffer = ChatLive_AddBuffer[chat_number];
+    ChatLive_AddBuffer[chat_number] = [];
+
+    var i,
+        len = buffer.length,
+        fragment = document.createDocumentFragment();
+
+    for (i = 0; i < len; i++) {
+        ChatLive_ElementAdd(buffer[i], fragment);
+    }
+
+    if (Chat_div[chat_number]) Chat_div[chat_number].appendChild(fragment);
+
+    if (ChatLive_LineAddCounter[chat_number] > Chat_CleanMax) {
+        ChatLive_LineAddCounter[chat_number] = 0;
+        Chat_Clean(chat_number);
     }
 }
 
@@ -2058,7 +2099,7 @@ function ChatLive_LineAdd(messageObj) {
 //     skip_addline: skip_addline,
 // };
 
-function ChatLive_ElementAdd(messageObj) {
+function ChatLive_ElementAdd(messageObj, fragment) {
     var style = '',
         classname = 'chat_line';
 
@@ -2112,26 +2153,29 @@ function ChatLive_ElementAdd(messageObj) {
     if (!messageObj.addToStart) {
         //skip animation if chat not showing to prevent animations when it shows
         chat_line_holder.className = Play_ChatEnable ? ChatLive_chat_line_class : 'chat_line_holder';
-        ChatLive_ElementAddCheckExtra(messageObj);
-        Chat_div[messageObj.chat_number].appendChild(chat_line_holder);
+        ChatLive_ElementAddCheckExtra(messageObj, fragment);
+        (fragment || Chat_div[messageObj.chat_number]).appendChild(chat_line_holder);
     } else {
         chat_line_holder.className = 'chat_line_holder';
         Chat_div[messageObj.chat_number].insertBefore(chat_line_holder, Chat_div[messageObj.chat_number].childNodes[0]);
-        ChatLive_ElementAddCheckExtra(messageObj);
+        ChatLive_ElementAddCheckExtra(messageObj, fragment);
     }
 }
 
-function ChatLive_ElementAddCheckExtra(messageObj) {
+function ChatLive_ElementAddCheckExtra(messageObj, fragment) {
     if (messageObj.extraMessage) {
         //REDEEMED_MESSAGE or etc related
 
-        ChatLive_ElementAdd({
-            chat_number: messageObj.chat_number,
-            message: ChatLive_LineAddSimple(messageObj.extraMessage),
-            skip_addline: 1,
-            extraClass: messageObj.extraMessageClass,
-            addToStart: messageObj.addToStart
-        });
+        ChatLive_ElementAdd(
+            {
+                chat_number: messageObj.chat_number,
+                message: ChatLive_LineAddSimple(messageObj.extraMessage),
+                skip_addline: 1,
+                extraClass: messageObj.extraMessageClass,
+                addToStart: messageObj.addToStart
+            },
+            fragment
+        );
     }
 }
 
@@ -2193,6 +2237,7 @@ function ChatLive_Clear(chat_number) {
     Chat_Id[chat_number] = 0;
     ChatLive_LineAddCounter[chat_number] = 0;
     ChatLive_Messages[chat_number] = [];
+    ChatLive_AddBuffer[chat_number] = [];
 
     ChatLive_resetChatters(chat_number);
     Main_emptyWithEle(Chat_div[chat_number]);
@@ -2238,8 +2283,8 @@ function ChatLive_CleanUser(chat_number, message) {
             //Array.prototype maybe not supported by all browsers
             Array.prototype.forEach.call(array, function (el) {
                 if (el) {
-                    if (ChatLive_ClearChat) el.innerHTML = msg;
-                    else el.innerHTML += STR_BR + STR_BR + msg;
+                    if (ChatLive_ClearChat) el.textContent = msg;
+                    else el.insertAdjacentHTML('beforeend', STR_BR + STR_BR + msg);
 
                     Main_AddClassWithEle(el.parentElement, 'chat_purged');
                     //Prevent duplicate removal
@@ -2271,8 +2316,8 @@ function ChatLive_CleanMessage(message) {
         var el = Main_getElementById(message.tags['target-msg-id']);
 
         if (el) {
-            if (ChatLive_ClearChat) el.innerHTML = STR_CHAT_MESSAGE_DELETED;
-            else el.innerHTML += STR_BR + STR_BR + STR_CHAT_MESSAGE_DELETED;
+            if (ChatLive_ClearChat) el.textContent = STR_CHAT_MESSAGE_DELETED;
+            else el.insertAdjacentHTML('beforeend', STR_BR + STR_BR + STR_CHAT_MESSAGE_DELETED);
 
             Main_AddClassWithEle(el.parentElement, 'chat_purged');
             //Prevent duplicate removal
