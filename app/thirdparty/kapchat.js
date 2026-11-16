@@ -27,9 +27,13 @@ function emoteURLFromObj(obj, replaceDark) {
     return replaceDark ? value.replace('light', 'dark') : value;
 }
 
-function emoteTemplate(url, srcset) {
+function emoteTemplate(url, srcset, code) {
     return (
-        '<img class="emoticon" alt="" ' +
+        '<img class="emoticon" alt="' +
+        //The code is kept in alt so an emote image can be reverted to its code
+        //text when a chat emote image limit demotes it
+        (code ? mescape(code).replace(/"/g, '&quot;') : '') +
+        '" decoding="async" ' +
         (srcset ? 'srcset="' + srcset + '"' : '') +
         ' src="' +
         url +
@@ -61,19 +65,40 @@ function extraMessageTokenize(message, chat_number, bits, previewsEmote) {
         cheer = bits ? findCheerInToken(SplittedMessage[i], chat_number) : 0;
 
         if (cheer) {
-            retArray.push(cheer);
+            //On emote image limit keep the cheer code as text
+            retArray.push(ChatLive_TryAddEmoteImg(chat_number) ? cheer : mescape(SplittedMessage[i]));
         } else {
             emote = extraEmotes[chat_number][SplittedMessage[i]];
 
             //some 7tv emotes goes direct on top of the center of the previews emote
-            if (retArray.length && emote && emote.chat_div_zero && Main_A_includes_B(retArray[retArray.length - 1], 'emoticon')) {
+            if (
+                retArray.length &&
+                emote &&
+                emote.chat_div_zero &&
+                Main_A_includes_B(retArray[retArray.length - 1], 'emoticon') &&
+                ChatLive_TryAddEmoteImg(chat_number)
+            ) {
                 retArray[retArray.length - 1] = Main_A_includes_B(retArray[retArray.length - 1], 'zero-width-container')
                     ? zeroWidthDiv(retArray[retArray.length - 1], emote.chat_div_zero)
                     : zeroWidth(retArray[retArray.length - 1], emote.chat_div_zero);
             } else if (emote) {
-                retArray.push(emote.chat_div);
+                //On emote image limit keep the emote code as text
+                retArray.push(ChatLive_TryAddEmoteImg(chat_number) ? emote.chat_div : mescape(SplittedMessage[i]));
             } else {
-                retArray.push(!i && skipEscape ? SplittedMessage[i] : twemoji.parse(mescape(SplittedMessage[i]), true, true));
+                //Emoji become img via twemoji, they share the emote image limit,
+                //on limit the unicode emoji char stays as text
+                retArray.push(
+                    !i && skipEscape
+                        ? SplittedMessage[i]
+                        : twemoji.parse(
+                              mescape(SplittedMessage[i]),
+                              true,
+                              true,
+                              function () {
+                                  return ChatLive_TryAddEmoteImg(chat_number);
+                              }
+                          )
+                );
             }
         }
     }
@@ -164,7 +189,12 @@ function emoticonize(message, emotes) {
         tokenizedMessage.unshift(punycode.ucs2.encode(message.slice(replacement.last + 1)));
 
         // Unshift the emote HTML (but not as a string to allow us to process links and escape html still)
-        tokenizedMessage.unshift([emoteTemplate(emoteURL(replacement.id))]);
+        // [0] img HTML (carries the emote code in alt), [1] the emote code as typed,
+        // kept so a emote image limit can fall back to showing the code as text
+        tokenizedMessage.unshift([
+            emoteTemplate(emoteURL(replacement.id), null, punycode.ucs2.encode(message.slice(replacement.first, replacement.last + 1))),
+            punycode.ucs2.encode(message.slice(replacement.first, replacement.last + 1))
+        ]);
 
         // Splice the unparsed piece of the message
         message = message.slice(0, replacement.first);

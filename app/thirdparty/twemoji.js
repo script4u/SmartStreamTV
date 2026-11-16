@@ -171,7 +171,7 @@ var twemoji = (function () /*! Copyright Twitter Inc. and other contributors. Li
         return r.join('-');
     }
 
-    function parse(str, dontremove, emoticon) {
+    function parse(str, dontremove, emoticon, shouldRenderImg) {
         if (!str || typeof str !== 'string') return str + '';
 
         //Twitch title may contain < or > with causes html problems
@@ -188,10 +188,15 @@ var twemoji = (function () /*! Copyright Twitter Inc. and other contributors. Li
         return replace(str, function (rawText) {
             var iconId = grabTheRightIcon(rawText);
 
+            //Emote image limit reached, keep the unicode emoji as text
+            if (iconId && shouldRenderImg && !shouldRenderImg()) return rawText;
+
             return iconId
                 ? '<img class="' +
                       (emoticon ? 'emoticon' : 'emoji') +
-                      '" alt="" src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/' +
+                      '" alt="' +
+                      rawText +
+                      '" src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/' +
                       iconId +
                       '.png"/>'
                 : rawText;

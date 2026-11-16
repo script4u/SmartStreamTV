@@ -646,6 +646,18 @@ var Settings_value = {
         values: ['no', 'yes'],
         defaultValue: 1
     },
+    chat_emote_max_message: {
+        //Migrated to dialog
+        //0 = no limit, limits emote images per chat message
+        values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 25, 50, 100],
+        defaultValue: 1
+    },
+    chat_emote_max_total: {
+        //Migrated to dialog
+        //0 = no limit, limits emote images in the whole chat
+        values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 25, 50, 100, 250, 500],
+        defaultValue: 1
+    },
     individual_lines: {
         //Migrated to dialog
         values: ['no', 'yes'],
@@ -3348,6 +3360,18 @@ function Settings_DialogShowChat(click) {
             values: Settings_value.chat_line_animation.values,
             title: STR_CHAT_LINE_ANIMATION,
             summary: null
+        },
+        chat_emote_max_message: {
+            defaultValue: Settings_value.chat_emote_max_message.defaultValue,
+            values: Settings_value.chat_emote_max_message.values,
+            title: STR_CHAT_MAX_EMOTES_MESSAGE,
+            summary: STR_CHAT_MAX_EMOTES_MESSAGE_SUMMARY
+        },
+        chat_emote_max_total: {
+            defaultValue: Settings_value.chat_emote_max_total.defaultValue,
+            values: Settings_value.chat_emote_max_total.values,
+            title: STR_CHAT_MAX_EMOTES_TOTAL,
+            summary: STR_CHAT_MAX_EMOTES_TOTAL_SUMMARY
         },
         individual_lines: {
             defaultValue: Settings_value.individual_lines.defaultValue,

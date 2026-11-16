@@ -62,6 +62,60 @@ var ChatLive_selectedChannel = [];
 var ChatLive_sub_replace = new RegExp('\\\\s', 'gi');
 var ChatLive_chat_line_class = '';
 
+//Buffered chat lines, flushed once per frame into a single DocumentFragment:
+//appending messages one by one forces a layout/paint per message, batching
+//turns N passes into one, critical on low end devices
+var ChatLive_AddBuffer = [[], []];
+var ChatLive_AddBufferScheduled = [false, false];
+
+//Emote image limits (settings chat_emote_max_message/chat_emote_max_total,
+//0 = no limit). Covers every image in a chat message: third party emotes
+//(7TV/BTTV/FFZ, zero-width combos), Twitch native emotes, bit cheers and
+//twemoji emoji. When the per message limit is reached the extra emotes of that
+//message stay as code/text; the total limit is a sliding window, only the last
+//N images of the chat stay as images, older ones are demoted back to text.
+var ChatLive_EmoteMessageCount = 0;
+
+function ChatLive_GetEmoteLimit(key) {
+    var s = Settings_value[key];
+    return s ? parseInt(s.values[s.defaultValue], 10) || 0 : 0;
+}
+
+//True if one more emote image may be rendered in this message
+function ChatLive_TryAddEmoteImg(chat_number) {
+    var perMessageLimit = ChatLive_GetEmoteLimit('chat_emote_max_message');
+
+    if (perMessageLimit && ChatLive_EmoteMessageCount >= perMessageLimit) return false;
+
+    ChatLive_EmoteMessageCount++;
+
+    //The new image will be added right after this, demote the oldest images
+    //so that at most (totalLimit - 1) stay when it arrives
+    var totalLimit = ChatLive_GetEmoteLimit('chat_emote_max_total');
+    if (totalLimit) ChatLive_DemoteOldestEmoteImgs(chat_number, totalLimit - 1);
+
+    return true;
+}
+
+//Reverts the oldest emote images of the chat back to their code/text until
+//only maxImgs images remain. The code is recovered from the img alt attribute
+//(set at template time). Live HTMLCollection, document order is oldest first;
+//imgs removed with their chat line disappear from it automatically.
+function ChatLive_DemoteOldestEmoteImgs(chat_number, maxImgs) {
+    var div = Chat_div[chat_number];
+    if (!div) return;
+
+    var imgs = div.getElementsByClassName('emoticon'),
+        img,
+        code;
+
+    while (imgs.length > maxImgs) {
+        img = imgs[0];
+        code = img.getAttribute('alt') || '';
+        img.parentNode.replaceChild(document.createTextNode(code ? ' ' + code + ' ' : ' '), img);
+    }
+}
+
 var KnowBots = {
     Nightbot: 1,
     StreamElements: 1,
@@ -146,6 +200,10 @@ function ChatLive_Init(chat_number, SkipClear) {
 }
 
 function ChatLive_Switch() {
+    //Flush pending lines so they land on the right chat div before the swap
+    ChatLive_FlushAddBuffer(0);
+    ChatLive_FlushAddBuffer(1);
+
     var innerHTMLTemp = Chat_div[1].innerHTML;
 
     Chat_div[1].innerHTML = Chat_div[0].innerHTML;
@@ -623,7 +681,7 @@ function ChatLive_loadTwitchEmotesSuccess(responseText, chat_number, chat_id, ex
             extraEmotes[chat_number][emoticon.code] = {
                 code: emoticon.code,
                 id: id,
-                chat_div: emoteTemplate(url, srcset),
+                chat_div: emoteTemplate(url, srcset, emoticon.code),
                 '4x': url,
                 srcset: srcset
             };
@@ -709,7 +767,7 @@ function ChatLive_loadEmotesbttvChannel(data, chat_number) {
         data.forEach(function (emote) {
             srcset = ChatLive_bttv_srcset(emote.id);
             url = ChatLive_Base_BTTV_url + emote.id + '/3x';
-            chat_div = emoteTemplate(url, srcset);
+            chat_div = emoteTemplate(url, srcset, emote.code);
             id = emote.code + emote.id;
 
             extraEmotes[chat_number][emote.code] = {
@@ -768,7 +826,8 @@ function ChatLive_loadCheersChannelSuccess(responseText, chat_number, id) {
             action.tiers.forEach(function (tier) {
                 cheers[ChatLive_selectedChannel_id[chat_number]][action.prefix][tier.min_bits] = emoteTemplate(
                     tier.images.dark.animated['4'],
-                    ChatLive_ffz_srcset(tier.images.dark.animated)
+                    ChatLive_ffz_srcset(tier.images.dark.animated),
+                    action.prefix
                 );
             });
         });
@@ -836,7 +895,7 @@ function ChatLive_loadEmotesffz(data, chat_number, isGlobal) {
 
                     srcset = ChatLive_ffz_srcset(emoticon.urls);
                     url = emoticon.urls[4] || emoticon.urls[2] || emoticon.urls[1];
-                    chat_div = emoteTemplate(url, srcset);
+                    chat_div = emoteTemplate(url, srcset, emoticon.name);
                     id = emoticon.name + emoticon.id;
 
                     extraEmotes[chat_number][emoticon.name] = {
@@ -950,7 +1009,7 @@ function ChatLive_loadEmotesseven_tv(data, chat_number, isGlobal) {
             url = ChatLive_seven_tv_getEmoteUrl(baseEmoteUrl, emoteUrls[emoteUrls.length - 1]);
 
             srcset = ChatLive_seven_tv_srcset(baseEmoteUrl, emoteUrls);
-            chat_div = emoteTemplate(url, srcset);
+            chat_div = emoteTemplate(url, srcset, emote.name);
             id = emote.name + emote.id;
             chat_div_zero = emote.flags === 256 ? chat_div.replace('emoticon', 'emoticon zero-width-emote') : null;
 
@@ -1946,6 +2005,10 @@ function ChatLive_checkEmotes(tags) {
 }
 
 function ChatLive_extraMessageTokenize(tokenizedMessage, chat_number, tags) {
+    //The per message emote limit counts per chat line, reset it here as this
+    //runs once per line
+    ChatLive_EmoteMessageCount = 0;
+
     var wasArray = false,
         i = 0,
         len = tokenizedMessage.length;
@@ -1965,7 +2028,9 @@ function ChatLive_extraMessageTokenize(tokenizedMessage, chat_number, tags) {
 
             wasArray = false;
         } else {
-            tokenizedMessage[i] = tokenizedMessage[i][0];
+            //Native Twitch emote: [0] is the img HTML, [1] the emote code as
+            //typed; on limit keep the code as text instead of the image
+            tokenizedMessage[i] = ChatLive_TryAddEmoteImg(chat_number) ? tokenizedMessage[i][0] : mescape(tokenizedMessage[i][1]);
             wasArray = true;
         }
     }
@@ -1979,14 +2044,45 @@ function ChatLive_LineAddSimple(message) {
 
 function ChatLive_LineAdd(messageObj) {
     if (ChatLive_Playing) {
-        ChatLive_ElementAdd(messageObj);
-
-        if (ChatLive_LineAddCounter[messageObj.chat_number]++ > Chat_CleanMax) {
-            ChatLive_LineAddCounter[messageObj.chat_number] = 0;
-            Chat_Clean(messageObj.chat_number);
-        }
+        ChatLive_AddBuffer[messageObj.chat_number].push(messageObj);
+        ChatLive_ScheduleAddFlush(messageObj.chat_number);
+        ChatLive_LineAddCounter[messageObj.chat_number]++;
     } else {
         ChatLive_Messages[messageObj.chat_number].push(messageObj);
+    }
+}
+
+function ChatLive_ScheduleAddFlush(chat_number) {
+    if (ChatLive_AddBufferScheduled[chat_number]) return;
+
+    ChatLive_AddBufferScheduled[chat_number] = true;
+
+    (window.requestAnimationFrame ||
+        function (cb) {
+            return setTimeout(cb, 16);
+        })(function () {
+        ChatLive_AddBufferScheduled[chat_number] = false;
+        ChatLive_FlushAddBuffer(chat_number);
+    });
+}
+
+function ChatLive_FlushAddBuffer(chat_number) {
+    var buffer = ChatLive_AddBuffer[chat_number];
+    ChatLive_AddBuffer[chat_number] = [];
+
+    var i,
+        len = buffer.length,
+        fragment = document.createDocumentFragment();
+
+    for (i = 0; i < len; i++) {
+        ChatLive_ElementAdd(buffer[i], fragment);
+    }
+
+    if (Chat_div[chat_number]) Chat_div[chat_number].appendChild(fragment);
+
+    if (ChatLive_LineAddCounter[chat_number] > Chat_CleanMax) {
+        ChatLive_LineAddCounter[chat_number] = 0;
+        Chat_Clean(chat_number);
     }
 }
 
@@ -2003,7 +2099,7 @@ function ChatLive_LineAdd(messageObj) {
 //     skip_addline: skip_addline,
 // };
 
-function ChatLive_ElementAdd(messageObj) {
+function ChatLive_ElementAdd(messageObj, fragment) {
     var style = '',
         classname = 'chat_line';
 
@@ -2057,26 +2153,29 @@ function ChatLive_ElementAdd(messageObj) {
     if (!messageObj.addToStart) {
         //skip animation if chat not showing to prevent animations when it shows
         chat_line_holder.className = Play_ChatEnable ? ChatLive_chat_line_class : 'chat_line_holder';
-        ChatLive_ElementAddCheckExtra(messageObj);
-        Chat_div[messageObj.chat_number].appendChild(chat_line_holder);
+        ChatLive_ElementAddCheckExtra(messageObj, fragment);
+        (fragment || Chat_div[messageObj.chat_number]).appendChild(chat_line_holder);
     } else {
         chat_line_holder.className = 'chat_line_holder';
         Chat_div[messageObj.chat_number].insertBefore(chat_line_holder, Chat_div[messageObj.chat_number].childNodes[0]);
-        ChatLive_ElementAddCheckExtra(messageObj);
+        ChatLive_ElementAddCheckExtra(messageObj, fragment);
     }
 }
 
-function ChatLive_ElementAddCheckExtra(messageObj) {
+function ChatLive_ElementAddCheckExtra(messageObj, fragment) {
     if (messageObj.extraMessage) {
         //REDEEMED_MESSAGE or etc related
 
-        ChatLive_ElementAdd({
-            chat_number: messageObj.chat_number,
-            message: ChatLive_LineAddSimple(messageObj.extraMessage),
-            skip_addline: 1,
-            extraClass: messageObj.extraMessageClass,
-            addToStart: messageObj.addToStart
-        });
+        ChatLive_ElementAdd(
+            {
+                chat_number: messageObj.chat_number,
+                message: ChatLive_LineAddSimple(messageObj.extraMessage),
+                skip_addline: 1,
+                extraClass: messageObj.extraMessageClass,
+                addToStart: messageObj.addToStart
+            },
+            fragment
+        );
     }
 }
 
@@ -2138,6 +2237,7 @@ function ChatLive_Clear(chat_number) {
     Chat_Id[chat_number] = 0;
     ChatLive_LineAddCounter[chat_number] = 0;
     ChatLive_Messages[chat_number] = [];
+    ChatLive_AddBuffer[chat_number] = [];
 
     ChatLive_resetChatters(chat_number);
     Main_emptyWithEle(Chat_div[chat_number]);
@@ -2183,8 +2283,8 @@ function ChatLive_CleanUser(chat_number, message) {
             //Array.prototype maybe not supported by all browsers
             Array.prototype.forEach.call(array, function (el) {
                 if (el) {
-                    if (ChatLive_ClearChat) el.innerHTML = msg;
-                    else el.innerHTML += STR_BR + STR_BR + msg;
+                    if (ChatLive_ClearChat) el.textContent = msg;
+                    else el.insertAdjacentHTML('beforeend', STR_BR + STR_BR + msg);
 
                     Main_AddClassWithEle(el.parentElement, 'chat_purged');
                     //Prevent duplicate removal
@@ -2216,8 +2316,8 @@ function ChatLive_CleanMessage(message) {
         var el = Main_getElementById(message.tags['target-msg-id']);
 
         if (el) {
-            if (ChatLive_ClearChat) el.innerHTML = STR_CHAT_MESSAGE_DELETED;
-            else el.innerHTML += STR_BR + STR_BR + STR_CHAT_MESSAGE_DELETED;
+            if (ChatLive_ClearChat) el.textContent = STR_CHAT_MESSAGE_DELETED;
+            else el.insertAdjacentHTML('beforeend', STR_BR + STR_BR + STR_CHAT_MESSAGE_DELETED);
 
             Main_AddClassWithEle(el.parentElement, 'chat_purged');
             //Prevent duplicate removal
