@@ -31,7 +31,7 @@ import net.grandcentrix.tray.AppPreferences;
 
 public class SyncChannelJobService extends JobService {
 
-    private static final String TAG = "STTV_ChannelJobService";
+    private static final String TAG = "SSTV_ChannelJobService";
 
     @Override
     public boolean onStartJob(final JobParameters jobParameters) {

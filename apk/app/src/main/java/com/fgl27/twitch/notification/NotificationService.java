@@ -42,7 +42,7 @@ import net.grandcentrix.tray.AppPreferences;
 public class NotificationService extends Service {
 
     @SuppressWarnings("FieldCanBeLocal")
-    private final String TAG = "STTV_Notification";
+    private final String TAG = "SSTV_Notification";
 
     private HandlerThread NotificationThread;
     private Handler NotificationHandler;
