@@ -150,22 +150,17 @@ var Settings_value = {
         values: ['no', 'yes'],
         defaultValue: 1
     },
-    ttv_lolProxy: {
-        //Migrated to dialog
-        values: ['no', 'yes'],
-        defaultValue: 1
-    },
     proxy_timeout: {
         //Migrated to dialog
         values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30],
         defaultValue: 10
     },
-    T1080: {
+    reyohohoProxy: {
         //Migrated to dialog
         values: ['no', 'yes'],
         defaultValue: 1
     },
-    k_twitch: {
+    reyohohoToken: {
         //Migrated to dialog
         values: ['no', 'yes'],
         defaultValue: 1
@@ -986,7 +981,7 @@ function Settings_SetSettings() {
     div += Settings_Content('speed_adjust', dis_ena, STR_SPEED_ADJUST, STR_SPEED_ADJUST_SUMMARY);
 
     //Dialog settings
-    //div += Settings_Content('proxy_settings', [STR_ENTER_TO_OPEN], PROXY_SETTINGS, null);
+    div += Settings_Content('proxy_settings', [STR_ENTER_TO_OPEN], PROXY_SETTINGS, null);
     div += Settings_Content('player_extracodecs', [STR_ENTER_TO_OPEN], STR_PLAYER_EXTRA_CODEC, STR_PLAYER_EXTRA_CODEC_SUMMARY);
     div += Settings_Content('blocked_codecs', [STR_ENTER_TO_OPEN], STR_BLOCKED_CODEC, STR_BLOCKED_CODEC_SUMMARY);
 
@@ -1151,7 +1146,7 @@ function Settings_SetDefaults() {
     OSInterface_SetCheckSource(Settings_Obj_default('check_source') === 1);
     Settings_SetPingWarning();
     SettingsColor_SetAnimationStyleRestore();
-    //Settings_proxy_set_start();
+    Settings_proxy_set_start();
     Settings_set_proxy_timeout();
     Settings_set_all_notification();
     Settings_SetLang();
@@ -1424,9 +1419,7 @@ function Settings_SetDefault(position) {
     else if (position === 'dpad_position') Settings_DpadPOsition();
     else if (position === 'PP_workaround') Settings_PP_Workaround();
     else if (position === 'proxy_timeout') Settings_set_proxy_timeout();
-    else if (position === 'ttv_lolProxy') Settings_set_all_proxy('ttv_lolProxy');
-    else if (position === 'k_twitch') Settings_set_all_proxy('k_twitch');
-    else if (position === 'T1080') Settings_set_all_proxy('T1080');
+    else if (position === 'reyohohoProxy') Settings_set_all_proxy('reyohohoProxy');
     else if (position === 'vod_seek_min') Settings_check_min_seek();
     else if (position === 'vod_seek_max') Settings_check_max_seek();
     else if (position === 'auto_minimize_inactive') Settings_SetAutoMinimizeTimeout();
@@ -1508,8 +1501,8 @@ function Settings_checkMatureKeyEnter() {
     }
 }
 
-var proxyArray = ['k_twitch', 'ttv_lolProxy', 'T1080'];
-var proxyArrayFull = ['k_twitch', 'ttv_lolProxy', 'T1080', 'disabled'];
+var proxyArray = ['reyohohoProxy'];
+var proxyArrayFull = ['reyohoho', 'disabled'];
 var proxyType = 'disabled';
 
 function Settings_set_all_proxy(current) {
@@ -1531,39 +1524,30 @@ function Settings_set_all_proxy(current) {
     Settings_proxy_set_Type();
 }
 
-// function Settings_proxy_set_start() {
-//     var i = 0,
-//         len = proxyArray.length;
-//     for (i; i < len; i++) {
-//         if (Settings_Obj_default(proxyArray[i]) === 1) {
-//             use_proxy = true;
-//             Settings_proxy_set_current(proxyArray[i]);
-//             break;
-//         }
-//     }
-//     Settings_proxy_set_Type();
-// }
+function Settings_proxy_set_start() {
+    var i = 0,
+        len = proxyArray.length;
+    for (i; i < len; i++) {
+        if (Settings_Obj_default(proxyArray[i]) === 1) {
+            use_proxy = true;
+            Settings_proxy_set_current(proxyArray[i]);
+            break;
+        }
+    }
+    Settings_proxy_set_Type();
+}
 
 function Settings_proxy_set_Type() {
     proxyType = proxyArrayFull[Settings_get_enabled_Proxy()];
 }
 
 function Settings_proxy_set_current(current) {
-    if (current === 'T1080') {
-        proxy_url = T1080_proxy;
+    if (current === 'reyohohoProxy') {
+        proxy_url = reyohoho_servers[reyohoho_server_pos];
         proxy_headers = null;
-        proxy_has_parameter = true;
-        proxy_has_token = true;
-    } else if (current === 'k_twitch') {
-        proxy_url = ktwitch_proxy;
-        proxy_headers = null;
-        proxy_has_parameter = true;
-        proxy_has_token = true;
-    } else {
-        proxy_url = Play_live_ttv_lol_links;
-        proxy_headers = ttv_lol_headers;
-        proxy_has_parameter = true;
+        proxy_has_parameter = false;
         proxy_has_token = false;
+        proxy_full_url = true;
     }
 }
 
@@ -1572,17 +1556,11 @@ function Settings_set_proxy_timeout() {
 }
 
 function Settings_get_enabled_Proxy() {
-    if (Settings_Obj_default('k_twitch') === 1) {
+    if (Settings_Obj_default('reyohohoProxy') === 1) {
         return 0;
     }
-    if (Settings_Obj_default('ttv_lolProxy') === 1) {
-        return 1;
-    }
-    if (Settings_Obj_default('T1080') === 1) {
-        return 2;
-    }
 
-    return 3;
+    return 1;
 }
 
 function Settings_check_min_seek() {
@@ -2586,34 +2564,27 @@ function Settings_ForceEnableAnimations() {
 
 function Settings_DialogShowProxy(click) {
     var array_no_yes = [STR_NO, STR_YES];
-    Settings_value.ttv_lolProxy.values = array_no_yes;
-    Settings_value.k_twitch.values = array_no_yes;
-    Settings_value.T1080.values = array_no_yes;
+    Settings_value.reyohohoProxy.values = array_no_yes;
+    Settings_value.reyohohoToken.values = array_no_yes;
 
     var obj = {
         proxy_timeout: {
-            defaultValue: Settings_value.k_twitch.defaultValue,
-            values: Settings_value.k_twitch.values,
+            defaultValue: Settings_value.proxy_timeout.defaultValue,
+            values: Settings_value.proxy_timeout.values,
             title: STR_PROXY_TIMEOUT,
             summary: STR_PROXY_TIMEOUT_SUMMARY
         },
-        T1080: {
-            defaultValue: Settings_value.ttv_lolProxy.defaultValue,
-            values: Settings_value.ttv_lolProxy.values,
-            title: STR_T1080,
-            summary: STR_T1080_SUMMARY
+        reyohohoProxy: {
+            defaultValue: Settings_value.reyohohoProxy.defaultValue,
+            values: Settings_value.reyohohoProxy.values,
+            title: STR_REYOHOHO,
+            summary: STR_REYOHOHO_SUMMARY
         },
-        ttv_lolProxy: {
-            defaultValue: Settings_value.k_twitch.defaultValue,
-            values: Settings_value.k_twitch.values,
-            title: STR_TTV_LOL,
-            summary: STR_TTV_LOL_SUMMARY
-        },
-        k_twitch: {
-            defaultValue: Settings_value.ttv_lolProxy.defaultValue,
-            values: Settings_value.ttv_lolProxy.values,
-            title: STR_K_TWITCH,
-            summary: STR_K_TWITCH_SUMMARY
+        reyohohoToken: {
+            defaultValue: Settings_value.reyohohoToken.defaultValue,
+            values: Settings_value.reyohohoToken.values,
+            title: STR_REYOHOHO_TOKEN,
+            summary: STR_REYOHOHO_TOKEN_SUMMARY
         }
     };
 

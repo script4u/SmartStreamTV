@@ -821,6 +821,12 @@ function en_USLang() {
     STR_TTV_LOL = 'TTV LOL';
     STR_K_TWITCH = 'K-Twitch-Bypass';
     STR_T1080 = 'T1080';
+    STR_REYOHOHO = 'ReYohoho (1080p/1440p)';
+    STR_REYOHOHO_SUMMARY =
+        'Gets the stream playlist from a reyohoho.ru server, unlocking up to 1440p60 (needs HEVC codec enabled). No Twitch token is sent, if a server fails another one is tried before falling back to default.';
+    STR_REYOHOHO_TOKEN = 'Send Twitch token to ReYohoho (ad free)';
+    STR_REYOHOHO_TOKEN_SUMMARY =
+        'Experimental way to avoid ads: sends your Twitch OAuth token (X-Auth-Token header) to the reyohoho.ru server, so the backend can request an ad free playback token with full quality. Only enable if you trust the reyohoho.ru service with your token. Requires a added user, only used for live streams via the proxy.';
 
     STR_PROXY_TIMEOUT = 'Proxy timeout (time in seconds)';
     STR_PROXY_TIMEOUT_SUMMARY =
