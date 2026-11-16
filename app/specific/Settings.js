@@ -3740,14 +3740,36 @@ function Settings_ScrollConatiner(div, pos) {
 
     var center = Settings_DialogScrollCenter,
         doc = Main_getElementById(div),
-        value = 0,
-        offset = 0;
+        holder = doc.parentElement,
+        value = 0;
 
     if (pos > center) {
-        value = Main_getElementById(Settings_DialogValue[pos - center - offset] + '_div').offsetTop;
+        value = Main_getElementById(Settings_DialogValue[pos - center] + '_div').offsetTop;
     }
 
-    doc.style.transform = 'translateY(-' + value / BodyfontSize + 'em)';
+    //Never scroll past the end of the list, the rows with summaries are taller
+    //than the row count math above assumes
+    var max = doc.scrollHeight - holder.clientHeight;
+    if (value > max) value = max > 0 ? max : 0;
+
+    //Make sure the focused option is fully visible inside the container
+    var focused = Main_getElementById(Settings_DialogValue[pos] + '_div');
+    if (focused) {
+        var top = focused.offsetTop - value;
+
+        if (top < 0) value = focused.offsetTop;
+        else if (top + focused.offsetHeight > holder.clientHeight) {
+            value = focused.offsetTop + focused.offsetHeight - holder.clientHeight;
+        }
+
+        if (value > max) value = max > 0 ? max : 0;
+        if (value < 0) value = 0;
+    }
+
+    //Transform in px: the dialog font-size is a percentage of the app base
+    //font (BodyfontSize), an em based translate under-shoots and the last
+    //rows stay hidden below the container
+    doc.style.transform = 'translateY(-' + value + 'px)';
 }
 
 function Settings_DialogUpDown(offset) {
