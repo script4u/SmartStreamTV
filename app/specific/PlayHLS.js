@@ -37,18 +37,27 @@ var Play_base_live_links =
 
 var Play_original_live_links = 'https://usher.ttvnw.net/api/channel/hls/';
 
-var Play_live_ttv_lol_links = 'https://api.ttv.lol/playlist/';
-var ttv_lol_headers = JSON.stringify([['X-Donate-To', 'https://ttv.lol/donate']]);
-
-var ktwitch_proxy = 'https://api.twitch.hkg.kwabang.net/hls-raw/';
-
-var T1080_proxy = 'https://api1080.ontdb.com/';
+//ReYohoho proxy (https://github.com/reyohoho/twitch_quality_proxy) serves the
+//master playlist through its own backend, unlocking 1080p/1440p, the
+//backend gets the PlaybackAccessToken itself so no token is sent to it, one
+//server is used at a time on fail the next is tried before falling back
+var reyohoho_servers = [
+    'https://proxy4.rte.net.ru/',
+    'https://proxy7.rte.net.ru/',
+    'https://proxy5.rte.net.ru/',
+    'https://proxy6.rte.net.ru/'
+];
+var reyohoho_server_pos = 0;
+var reyohoho_fail_count = 0;
 
 var proxy_timeout = 5000;
 var proxy_url = '';
 var proxy_headers = null;
 var proxy_has_parameter = false;
 var proxy_has_token = false;
+//Build the proxy URL as proxy_url + the full usher URL instead of
+//proxy_url + channel + '.m3u8' + params (ReYohoho takes the full URL as path)
+var proxy_full_url = false;
 
 //var proxy_ping_url = 'https://api.ttv.lol/ping';
 
@@ -71,6 +80,7 @@ function PlayHLS_GetPlayListAsync(isLive, Channel_or_VOD_Id, CheckId_y, CheckId_
 
     //if at te end of a request the values are different we have a issues
     proxy_fail_counter_checker = proxy_fail_counter;
+    reyohoho_fail_count = 0;
 
     if (use_proxy && isLive && !proxy_has_token) {
         PlayHLS_PlayListUrl(isLive, Channel_or_VOD_Id, CheckId_y, CheckId_x, callBackSuccess.name, null, null, true);
@@ -164,7 +174,16 @@ function PlayHLS_GetPlayListUrl(isLive, Channel_or_VOD_Id, Token, Sig, useProxy)
         if (useProxy) {
             headers = proxy_headers;
 
-            if (proxy_has_parameter && !proxy_has_token) {
+            if (proxy_full_url) {
+                url = proxy_url + 'https://usher.ttvnw.net/api/channel/hls/' + Channel_or_VOD_Id + '.m3u8?' + URL_parameters;
+
+                //As the official ReYohoho extension does send the user Twitch OAuth
+                //token (X-Auth-Token header) to the proxy server so it can request
+                //an ad free playback token, only when enabled and a user is logged in
+                if (Settings_Obj_default('reyohohoToken') === 1 && AddUser_UserHasToken()) {
+                    headers = JSON.stringify([['X-Auth-Token', AddUser_UsernameArray[0].access_token]]);
+                }
+            } else if (proxy_has_parameter && !proxy_has_token) {
                 url = proxy_url + Channel_or_VOD_Id + '.m3u8' + encodeURIComponent('?' + URL_parameters);
             } else {
                 url = proxy_url + Channel_or_VOD_Id + '.m3u8?token=' + encodeURIComponent(Token) + '&sig=' + Sig + '&' + URL_parameters;
@@ -234,6 +253,15 @@ function PlayHLS_PlayListUrlResult(result, checkResult, check_1, check_2, check_
     if (response.status !== 200) {
         //in case we fail using proxy restart the process without using proxy
         if (isLive && useProxy && PlayHLS_CheckProxyResultFail(response.responseText)) {
+            if (proxy_full_url && reyohoho_fail_count < reyohoho_servers.length - 1) {
+                //ReYohoho: try the next server before giving up on the proxy
+                reyohoho_fail_count++;
+                reyohoho_server_pos = (reyohoho_server_pos + 1) % reyohoho_servers.length;
+                proxy_url = reyohoho_servers[reyohoho_server_pos];
+                PlayHLS_PlayListUrl(isLive, Channel_or_VOD_Id, CheckId_y, CheckId_x, callBackSuccess, null, null, true);
+                return;
+            }
+
             PlayHLS_GetToken(isLive, Channel_or_VOD_Id, CheckId_y, CheckId_x, callBackSuccess, false);
             return;
         }
@@ -269,8 +297,9 @@ function PlayHLS_CheckProxyResultFail(responseText) {
 }
 
 function PlayHLS_GetPlayListSync(isLive, Channel_or_VOD_Id) {
-    //if at te end of a request the values are different we have a issues
+    //if at the end of a request the values are different we have a issues
     proxy_fail_counter_checker = proxy_fail_counter;
+    reyohoho_fail_count = 0;
 
     try {
         return PlayHLS_GetPlayListSyncToken(isLive, Channel_or_VOD_Id, use_proxy);
@@ -339,6 +368,14 @@ function PlayHLS_GetPlayListSyncUrl(isLive, Channel_or_VOD_Id, useProxy, Token, 
             } else {
                 //in case we fail using proxy restart the process without using proxy
                 if (isLive && useProxy && PlayHLS_CheckProxyResultFail(response.responseText)) {
+                    if (proxy_full_url && reyohoho_fail_count < reyohoho_servers.length - 1) {
+                        //ReYohoho: try the next server before giving up on the proxy
+                        reyohoho_fail_count++;
+                        reyohoho_server_pos = (reyohoho_server_pos + 1) % reyohoho_servers.length;
+                        proxy_url = reyohoho_servers[reyohoho_server_pos];
+                        return PlayHLS_GetPlayListSyncUrl(isLive, Channel_or_VOD_Id, true);
+                    }
+
                     return PlayHLS_GetPlayListSyncToken(isLive, Channel_or_VOD_Id, false);
                 } else {
                     return JSON.stringify({
