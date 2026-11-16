@@ -62,6 +62,54 @@ var ChatLive_selectedChannel = [];
 var ChatLive_sub_replace = new RegExp('\\\\s', 'gi');
 var ChatLive_chat_line_class = '';
 
+//Emote image limits (settings chat_emote_max_message/chat_emote_max_total,
+//0 = no limit). Covers every image in a chat message: third party emotes
+//(7TV/BTTV/FFZ, zero-width combos), Twitch native emotes, bit cheers and
+//twemoji emoji. When the per message limit is reached the extra emotes of that
+//message stay as code/text; the total limit is a sliding window, only the last
+//N images of the chat stay as images, older ones are demoted back to text.
+var ChatLive_EmoteMessageCount = 0;
+
+function ChatLive_GetEmoteLimit(key) {
+    var s = Settings_value[key];
+    return s ? parseInt(s.values[s.defaultValue], 10) || 0 : 0;
+}
+
+//True if one more emote image may be rendered in this message
+function ChatLive_TryAddEmoteImg(chat_number) {
+    var perMessageLimit = ChatLive_GetEmoteLimit('chat_emote_max_message');
+
+    if (perMessageLimit && ChatLive_EmoteMessageCount >= perMessageLimit) return false;
+
+    ChatLive_EmoteMessageCount++;
+
+    //The new image will be added right after this, demote the oldest images
+    //so that at most (totalLimit - 1) stay when it arrives
+    var totalLimit = ChatLive_GetEmoteLimit('chat_emote_max_total');
+    if (totalLimit) ChatLive_DemoteOldestEmoteImgs(chat_number, totalLimit - 1);
+
+    return true;
+}
+
+//Reverts the oldest emote images of the chat back to their code/text until
+//only maxImgs images remain. The code is recovered from the img alt attribute
+//(set at template time). Live HTMLCollection, document order is oldest first;
+//imgs removed with their chat line disappear from it automatically.
+function ChatLive_DemoteOldestEmoteImgs(chat_number, maxImgs) {
+    var div = Chat_div[chat_number];
+    if (!div) return;
+
+    var imgs = div.getElementsByClassName('emoticon'),
+        img,
+        code;
+
+    while (imgs.length > maxImgs) {
+        img = imgs[0];
+        code = img.getAttribute('alt') || '';
+        img.parentNode.replaceChild(document.createTextNode(code ? ' ' + code + ' ' : ' '), img);
+    }
+}
+
 var KnowBots = {
     Nightbot: 1,
     StreamElements: 1,
@@ -623,7 +671,7 @@ function ChatLive_loadTwitchEmotesSuccess(responseText, chat_number, chat_id, ex
             extraEmotes[chat_number][emoticon.code] = {
                 code: emoticon.code,
                 id: id,
-                chat_div: emoteTemplate(url, srcset),
+                chat_div: emoteTemplate(url, srcset, emoticon.code),
                 '4x': url,
                 srcset: srcset
             };
@@ -709,7 +757,7 @@ function ChatLive_loadEmotesbttvChannel(data, chat_number) {
         data.forEach(function (emote) {
             srcset = ChatLive_bttv_srcset(emote.id);
             url = ChatLive_Base_BTTV_url + emote.id + '/3x';
-            chat_div = emoteTemplate(url, srcset);
+            chat_div = emoteTemplate(url, srcset, emote.code);
             id = emote.code + emote.id;
 
             extraEmotes[chat_number][emote.code] = {
@@ -768,7 +816,8 @@ function ChatLive_loadCheersChannelSuccess(responseText, chat_number, id) {
             action.tiers.forEach(function (tier) {
                 cheers[ChatLive_selectedChannel_id[chat_number]][action.prefix][tier.min_bits] = emoteTemplate(
                     tier.images.dark.animated['4'],
-                    ChatLive_ffz_srcset(tier.images.dark.animated)
+                    ChatLive_ffz_srcset(tier.images.dark.animated),
+                    action.prefix
                 );
             });
         });
@@ -836,7 +885,7 @@ function ChatLive_loadEmotesffz(data, chat_number, isGlobal) {
 
                     srcset = ChatLive_ffz_srcset(emoticon.urls);
                     url = emoticon.urls[4] || emoticon.urls[2] || emoticon.urls[1];
-                    chat_div = emoteTemplate(url, srcset);
+                    chat_div = emoteTemplate(url, srcset, emoticon.name);
                     id = emoticon.name + emoticon.id;
 
                     extraEmotes[chat_number][emoticon.name] = {
@@ -950,7 +999,7 @@ function ChatLive_loadEmotesseven_tv(data, chat_number, isGlobal) {
             url = ChatLive_seven_tv_getEmoteUrl(baseEmoteUrl, emoteUrls[emoteUrls.length - 1]);
 
             srcset = ChatLive_seven_tv_srcset(baseEmoteUrl, emoteUrls);
-            chat_div = emoteTemplate(url, srcset);
+            chat_div = emoteTemplate(url, srcset, emote.name);
             id = emote.name + emote.id;
             chat_div_zero = emote.flags === 256 ? chat_div.replace('emoticon', 'emoticon zero-width-emote') : null;
 
@@ -1946,6 +1995,10 @@ function ChatLive_checkEmotes(tags) {
 }
 
 function ChatLive_extraMessageTokenize(tokenizedMessage, chat_number, tags) {
+    //The per message emote limit counts per chat line, reset it here as this
+    //runs once per line
+    ChatLive_EmoteMessageCount = 0;
+
     var wasArray = false,
         i = 0,
         len = tokenizedMessage.length;
@@ -1965,7 +2018,9 @@ function ChatLive_extraMessageTokenize(tokenizedMessage, chat_number, tags) {
 
             wasArray = false;
         } else {
-            tokenizedMessage[i] = tokenizedMessage[i][0];
+            //Native Twitch emote: [0] is the img HTML, [1] the emote code as
+            //typed; on limit keep the code as text instead of the image
+            tokenizedMessage[i] = ChatLive_TryAddEmoteImg(chat_number) ? tokenizedMessage[i][0] : mescape(tokenizedMessage[i][1]);
             wasArray = true;
         }
     }

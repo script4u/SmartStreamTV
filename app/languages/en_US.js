@@ -692,6 +692,12 @@ function en_USLang() {
         "Modes are 'disable', 'enable' (auto), Bright, or Darker. In auto mode, messages alternate between darker and lighter accents if the chat is above the stream; otherwise, the background is bright.";
     STR_CHAT_INDIVIDUAL_LINE = 'Insert a line to separate individual chat messages';
     STR_CHAT_LINE_ANIMATION = 'Animated scrolling when adding a new chat message';
+    STR_CHAT_MAX_EMOTES_MESSAGE = 'Max emote images per chat message';
+    STR_CHAT_MAX_EMOTES_MESSAGE_SUMMARY =
+        'Only the first N emotes/cheers/emoji of a message are shown as images (Twitch, 7TV, BTTV, FFZ), 0 = no limit. The rest stay as code/text.';
+    STR_CHAT_MAX_EMOTES_TOTAL = 'Max emote images in the chat';
+    STR_CHAT_MAX_EMOTES_TOTAL_SUMMARY =
+        'Sliding window: only the last N images (emotes, cheers, emoji) stay rendered in the chat, 0 = no limit. When a new image appears over the limit, the oldest one reverts to its code/text.';
     STR_CHAT_LOGGING = 'Logging in the chat with the current user';
     STR_CHAT_LOGGING_SUMMARY =
         "When an authorization key is provided, the app logs into chat as the current user unless chat is disabled in the player's controls. If this is net to NO, it logs in anonymously, allowing messages but hiding bans and ROOMSTATE.";
